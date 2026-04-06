@@ -1,2 +1,2 @@
 # divvy-demand-forecasting-aws-pipeline
-End-to-end AWS data pipeline and demand forecasting project for Divvy bike rebalancing
+AWS-based ETL and forecasting workflow for next-day hourly bike station demand
