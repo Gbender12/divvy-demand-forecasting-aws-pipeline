@@ -1,38 +1,64 @@
 # divvy-demand-forecasting-aws-pipeline
-AWS-based ETL and forecasting workflow for next-day hourly bike station demand
+
+AWS-based ETL and forecasting workflow for next-day hourly Divvy bike station demand.
 
 ## Overview
-This project builds an AWS-based data engineering and forecasting pipeline to evaluate whether next-day hourly Divvy bike station departures can be forecast accurately enough to support proactive rebalancing decisions.
+
+This project documents an end-to-end AWS data engineering and forecasting workflow built to evaluate whether next-day hourly Divvy bike station departures can be forecast accurately enough to support proactive rebalancing decisions.
+
+The project combines cloud-based ingestion, transformation, validation, and modeling steps using AWS services and PySpark. It is being organized as a portfolio artifact to showcase both data engineering and forecasting work.
 
 ## Problem Statement
-Divvy demand varies by station, hour, and season. That makes proactive bike rebalancing difficult. This project tests whether historical trip data can support useful next-day station-level demand forecasts.
+
+Divvy demand varies by station, hour, and season. That makes proactive bike rebalancing difficult. This project tests whether historical trip data contains enough signal to support useful next-day station-level demand forecasts.
+
+## Research Question
+
+To what extent can next-day hourly station departures be forecast from Divvy trip history data with sufficient accuracy to support proactive rebalancing decisions?
+
+## Pipeline Overview
+
+![Pipeline flow](docs/pipeline-flow.png)
+
+At a high level, the workflow is:
+
+1. Ingest public Divvy trip data into Amazon S3.
+2. Catalog the raw data with AWS Glue.
+3. Clean and standardize trip-level data into a curated table.
+4. Aggregate station-level hourly departures for forecasting.
+5. Build a dense station-date-hour grid so zero-demand hours are represented.
+6. Evaluate baseline and improved forecasting approaches.
 
 ## Tech Stack
+
 - AWS S3
 - AWS Glue
 - AWS Athena
 - PySpark
 - Python
-- Jupyter / Glue Studio Notebook
-
-## Project Components
-- Raw trip data ingestion to S3
-- Glue crawler and catalog registration
-- Cleaning and timestamp normalization
-- Deduplication and hourly station aggregation
-- Dense station-date-hour grid creation
-- Baseline and improved forecasting models
-- Evaluation using MAE, RMSE, WMAPE, and non-zero MAPE
-
-## Current Status
-The pipeline is working end to end. Baseline and improved models were evaluated, and the improved model reduced error versus baseline, but results still fell short of the target needed for stand-alone operational use.
+- Jupyter / AWS Glue Studio Notebook
 
 ## Repository Structure
-TBD
 
-## Next Steps
-- Finalize repo organization
-- Add architecture diagrams
-- Add cleaned ETL scripts
-- Add SQL validation queries
-- Document production-readiness roadmap
+```text
+docs/
+  pipeline-flow.png
+  screenshots/
+    athena-validation-aggregate-output.png
+    athena-validation-cleaned-trip-table.png
+    athena-validation-duplicate-check.png
+    athena-validation-raw-timestamp-fix.png
+    glue-crawler.png
+    glue-job-aggregate.png
+    glue-job-clean-run-history.png
+    notebook-results-model-metrics.png
+    s3-layout.png
+
+sql/
+  aggregation_queries.sql
+  athena_validation_queries.sql
+  qa_checks.sql
+
+.gitignore
+LICENSE
+README.md
