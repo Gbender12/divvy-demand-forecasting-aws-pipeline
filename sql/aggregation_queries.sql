@@ -1,3 +1,6 @@
+-- Athena aggregation queries for the Divvy AWS pipeline
+
+-- 1. Aggregate curated-tripdata table
 SELECT
     start_station_id,
     start_station_name,
