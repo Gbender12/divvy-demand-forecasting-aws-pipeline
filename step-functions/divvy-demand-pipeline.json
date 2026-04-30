@@ -1,0 +1,199 @@
+{
+  "Comment": "Divvy demand pipeline",
+  "QueryLanguage": "JSONata",
+  "StartAt": "Lambda Invoke: ResolveDateRange",
+  "States": {
+    "Lambda Invoke: ResolveDateRange": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "arn:aws:lambda:us-east-1:654654537515:function:ResolveDateRange:$LATEST",
+        "Payload": "{% $states.input %}"
+      },
+      "Output": {
+        "resolved": "{% $states.result.Payload %}",
+        "input": "{% $states.input %}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Lambda Invoke: divvy-raw-monthly-ingest"
+    },
+    "Lambda Invoke: divvy-raw-monthly-ingest": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "arn:aws:lambda:us-east-1:654654537515:function:divvy-raw-monthly-ingest:$LATEST",
+        "Payload": {
+          "target_start_yyyymm": "{% $states.input.resolved.raw_ingest.target_start_yyyymm %}",
+          "target_end_yyyymm": "{% $states.input.resolved.raw_ingest.target_end_yyyymm %}"
+        }
+      },
+      "Output": {
+        "resolved": "{% $states.input.resolved %}",
+        "raw_ingest": "{% $states.result.Payload %}",
+        "input": "{% $states.input.input %}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Choice: RouteAfterRawIngest"
+    },
+    "Choice: RouteAfterRawIngest": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Condition": "{% $states.input.raw_ingest.any_new_data_loaded = true %}",
+          "Next": "Glue StartCrawler: divvy-raw-crawler"
+        },
+        {
+          "Condition": "{% $exists($states.input.input.force_downstream) and $states.input.input.force_downstream = true %}",
+          "Next": "Parallel: CurateAndRefreshWeather"
+        }
+      ],
+      "Default": "Succeed: NothingToDo"
+    },
+    "Glue StartCrawler: divvy-raw-crawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Arguments": {
+        "Name": "divvy-raw"
+      },
+      "Output": {
+        "resolved": "{% $states.input.resolved %}",
+        "raw_ingest": "{% $states.input.raw_ingest %}",
+        "input": "{% $states.input.input %}",
+        "crawler_start": "{% $states.result %}"
+      },
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Glue.CrawlerRunningException"
+          ],
+          "Next": "Wait: RawCrawler"
+        }
+      ],
+      "Next": "Wait: RawCrawler"
+    },
+    "Wait: RawCrawler": {
+      "Type": "Wait",
+      "Seconds": 15,
+      "Next": "Glue GetCrawler: divvy-raw-crawler"
+    },
+    "Glue GetCrawler: divvy-raw-crawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Arguments": {
+        "Name": "divvy-raw"
+      },
+      "Output": {
+        "resolved": "{% $states.input.resolved %}",
+        "raw_ingest": "{% $states.input.raw_ingest %}",
+        "input": "{% $states.input.input %}",
+        "crawler_status": "{% $states.result %}"
+      },
+      "Next": "Choice: IsRawCrawlerReady"
+    },
+    "Choice: IsRawCrawlerReady": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Condition": "{% $states.input.crawler_status.Crawler.State = 'READY' %}",
+          "Next": "Parallel: CurateAndRefreshWeather"
+        }
+      ],
+      "Default": "Wait: RawCrawler"
+    },
+    "Parallel: CurateAndRefreshWeather": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Glue StartJobRun.sync: divvy-tripdata-curation",
+          "States": {
+            "Glue StartJobRun.sync: divvy-tripdata-curation": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Arguments": {
+                "JobName": "divvy-tripdata-curation",
+                "Arguments": {
+                  "--target_start_yyyymm": "{% $states.input.resolved.tripdata_curation.target_start_yyyymm %}",
+                  "--target_end_yyyymm": "{% $states.input.resolved.tripdata_curation.target_end_yyyymm %}"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Glue StartJobRun.sync: weather-hourly-refresh",
+          "States": {
+            "Glue StartJobRun.sync: weather-hourly-refresh": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Arguments": {
+                "JobName": "weather-hourly-refresh",
+                "Arguments": {
+                  "--target_start_yyyymm": "{% $states.input.resolved.weather_refresh.target_start_yyyymm %}",
+                  "--target_end_yyyymm": "{% $states.input.resolved.weather_refresh.target_end_yyyymm %}"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Output": {
+        "resolved": "{% $states.input.resolved %}",
+        "raw_ingest": "{% $states.input.raw_ingest %}",
+        "input": "{% $states.input.input %}",
+        "parallel_results": "{% $states.result %}"
+      },
+      "Next": "Glue StartJobRun.sync: station-hour-demand-aggregation"
+    },
+    "Glue StartJobRun.sync: station-hour-demand-aggregation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Arguments": {
+        "JobName": "station-hour-demand-aggregation",
+        "Arguments": {
+          "--target_start_yyyymm": "{% $states.input.resolved.aggregate_refresh.target_start_yyyymm %}",
+          "--target_end_yyyymm": "{% $states.input.resolved.aggregate_refresh.target_end_yyyymm %}"
+        }
+      },
+      "Next": "Glue StartJobRun.sync: station-demand-model-train"
+    },
+    "Glue StartJobRun.sync: station-demand-model-train": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Arguments": {
+        "JobName": "station-demand-model-train"
+      },
+      "End": true
+    },
+    "Succeed: NothingToDo": {
+      "Type": "Succeed"
+    }
+  }
+}
