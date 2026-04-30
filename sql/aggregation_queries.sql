@@ -1,5 +1,3 @@
--- Example SQL documenting the hourly departures aggregation logic
-
 SELECT
     start_station_id,
     start_station_name,
@@ -9,7 +7,7 @@ SELECT
     COUNT(*) AS station_hour_departures,
     year(started_at) AS year_num,
     month(started_at) AS month_num
-FROM divvy_db.divvy_clean
+FROM divvy_db.curated_tripdata
 WHERE start_station_id IS NOT NULL
   AND trim(start_station_id) <> ''
   AND start_station_name IS NOT NULL
