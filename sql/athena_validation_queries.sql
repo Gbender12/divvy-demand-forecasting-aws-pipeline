@@ -12,7 +12,7 @@ SELECT
     member_casual,
     year_num,
     month_num
-FROM divvy_db.divvy_clean
+FROM divvy_db.curated_tripdata
 WHERE started_at IS NOT NULL
   AND ended_at IS NOT NULL
 LIMIT 20;
@@ -39,7 +39,7 @@ SELECT
     ended_at AS raw_ended_at,
     trim(both '"' from ended_at) AS trimmed_ended_at,
     CAST(trim(both '"' from ended_at) AS timestamp) AS cleaned_ended_at
-FROM divvy_db.raw
+FROM divvy_db.raw_tripdata
 WHERE started_at IS NOT NULL
   AND ended_at IS NOT NULL
 LIMIT 20;
